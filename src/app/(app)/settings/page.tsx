@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { requireSession } from "@/lib/server";
 import { LanguageSwitch } from "@/components/language-switch";
 import { SessionsList } from "@/components/sessions-list";
+import { ChangePasswordCard } from "@/components/change-password";
 import { LogoutButton } from "@/components/logout-button";
 import { cookies } from "next/headers";
 
@@ -35,6 +36,7 @@ export default async function SettingsPage() {
         <h2 className="mb-3 text-sm font-bold">{lang === "ar" ? "الأجهزة والجلسات" : "Devices & sessions"}</h2>
         <SessionsList lang={lang} />
       </div>
+      <ChangePasswordCard />
       <div className="card">
         <p className="mb-2 text-xs text-slate-400">{lang === "ar" ? "تصدير بياناتك كامل (JSON) — §17.11 portability" : "Full self-service export (JSON) — §11.11 portability"}</p>
         <a className="btn-ghost w-full" href="/api/export">{lang === "ar" ? "تصدير البيانات" : "Export my data"}</a>
