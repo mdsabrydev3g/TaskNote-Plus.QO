@@ -45,7 +45,9 @@ npm run dev                # http://localhost:3000
   npm run cap:sync
   npm run android:build     # android/app/build/outputs/apk/debug/app-debug.apk
   ```
-  `android/local.properties` = `sdk.dir=C:/android-sdk` (إملاء بمائل مائل forward slash — المائل الخلفي يكسر ملف properties). JDK 21 + SDK 36 عندك. الـ APK debug (لم يُحدّد keystore للتوقيع بعد).
+  `android/local.properties` = `sdk.dir=C:/android-sdk` (إملاء بمائل forward slash — المائل الخلفي يكسر ملف properties). JDK 21 + SDK 36 عندك.
+- **Release موقّع**: `cd android && gradlew.bat assembleRelease` → `app/build/outputs/apk/release/app-release.apk`. التوقيع يقرأ `android/keystore.properties` (مضاف إلى .gitignore — ممنوع أسرار في الريبو) وkeystore في `C:\Users\Msabry\.android\tasknote-release.keystore`. ⚠️ احفظ نسخة احتياطية من الـ keystore + الباسورد: فقدانهما = لا يمكن تحديث التطبيق على نفس `plus.tasknote.app` أبدًا.
+- **الأيقونة/Splash**: `node scripts/make-app-icon.mjs && npx capacitor-assets generate --android`.
 - **iOS**: يحتاج macOS + Xcode (لاحقًا: `npx cap add ios`).
 
 ## 5) بنى أساسية جاهزة
@@ -64,10 +66,9 @@ npm run dev                # http://localhost:3000
 
 - ✅ Build + type-check + 20/20 unit tests pass (يشمل timezone/DST).
 - ✅ Runtime مقابل Neon فعليًا: `prisma db push` → 15 جدول، RLS على 10، اختبار end-to-end حيّ على Vercel (signup→capture→inbox محفوظ فعلًا).
-- ✅ APK أندرويد debug مبنيّ (Capacitor remote-WebView → رابط Vercel الحيّ).
+- ✅ APK أندرويد debug + release موقّع — مبنيّان فعليًا (Capacitor remote-WebView → رابط Vercel الحيّ).
 - ✅ التقاط الوقت صار timezone-aware: العميل يبعت IANA zone + الآن، والمحليل يحسب مقابلها ويعيد حساب الـ offset عند التاريخ (DST-safe).
 - [!] OAuth/Passkeys + 2FA: مخطط في §10.2 — غير منفّذ بعد؛ email/password جاهز الآن.
-- [!] APK موقّع بـ debug keystore فقط؛ للإنتاج يلزم keystore خاص + `assembleRelease`.
 - [!] Rate limiting على Vercel serverless = لكل instance (Redis لاحقًا).
 - [!] AI Gateway/memories/RAG: مرحلة V2 حسب §23 — البنية (AIActionLog, aiAccessible) محجوزة.
 - [!] iOS + Desktop (Tauri): خارج MVP الحالي.
