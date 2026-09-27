@@ -39,6 +39,10 @@ export default async function SettingsPage() {
         <p className="mb-2 text-xs text-slate-400">{lang === "ar" ? "تصدير بياناتك كامل (JSON) — §17.11 portability" : "Full self-service export (JSON) — §11.11 portability"}</p>
         <a className="btn-ghost w-full" href="/api/export">{lang === "ar" ? "تصدير البيانات" : "Export my data"}</a>
       </div>
+      <div className="flex gap-4 text-xs text-slate-400">
+        <a className="underline" href="/privacy">{lang === "ar" ? "سياسة الخصوصية" : "Privacy Policy"}</a>
+        <a className="underline" href="/terms">{lang === "ar" ? "الشروط" : "Terms"}</a>
+      </div>
       <LogoutButton lang={lang} />
     </div>
   );

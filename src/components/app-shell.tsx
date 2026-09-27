@@ -3,6 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ReactNode } from "react";
 import { useApp } from "./providers";
+import { PullToRefresh } from "./pull-to-refresh";
 import { TKey } from "@/lib/i18n";
 
 const NAV: { href: string; key: TKey; icon: string }[] = [
@@ -45,7 +46,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <SyncBadge />
           </div>
         </header>
-        <div className="px-4 py-4 md:px-8">{children}</div>
+        <PullToRefresh><div className="px-4 py-4 md:px-8">{children}</div></PullToRefresh>
       </main>
 
       {/* Mobile bottom nav */}
@@ -63,10 +64,10 @@ export function AppShell({ children }: { children: ReactNode }) {
 }
 
 export function SyncBadge() {
-  const { online, pending } = useApp();
+  const { online, pending, syncing } = useApp();
   return (
-    <span className={`chip ${!online ? "bg-amber-100 text-amber-800" : pending > 0 ? "bg-sky-100 text-sky-800" : "bg-emerald-100 text-emerald-800"}`}>
-      {!online ? `⚡ ${pending > 0 ? `${pending} ⏳` : "Offline"}` : pending > 0 ? `⏳ ${pending}` : "✓ Synced"}
+    <span className={`chip ${!online ? "bg-amber-100 text-amber-800" : pending > 0 || syncing ? "bg-sky-100 text-sky-800" : "bg-emerald-100 text-emerald-800"}`}>
+      {!online ? `⚡ ${pending > 0 ? `${pending} ⏳` : "Offline"}` : pending > 0 ? `⏳ ${pending}` : syncing ? "⟳ Syncing" : "✓ Synced"}
     </span>
   );
 }

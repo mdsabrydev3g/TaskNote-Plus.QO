@@ -8,6 +8,19 @@ import type { NextRequest } from "next/server";
 
 const paramsSchema = z.object({ id: z.string().uuid() });
 
+// GET /api/notes/[id] — fresh server copy (conflict review §6.3 surfaced diff)
+export const GET = api({
+  handler: async (_req, ctx: { params: Promise<{ id: string }> }, s) => {
+    const { id } = paramsSchema.parse(await ctx.params);
+    const note = await db.note.findFirst({
+      where: { id, workspaceId: s.workspaceId, deletedAt: null },
+      select: { id: true, title: true, content: true, pinned: true, aiAccessible: true, version: true, updatedAt: true },
+    });
+    if (!note) return json({ error: "not_found" }, 404);
+    return json({ note });
+  },
+});
+
 // PATCH /api/notes/[id] — optimistic version check (§6.5)
 export const PATCH = api({
   handler: async (req: NextRequest, ctx: { params: Promise<{ id: string }> }, s) => {

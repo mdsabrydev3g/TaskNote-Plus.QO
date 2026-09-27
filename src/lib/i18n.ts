@@ -18,6 +18,10 @@ const dict = {
     capture_placeholder: "اكتب أي حاجة… #وسم بكرة 5pm عاجل",
     capture_btn: "التقاط", capturing: "بروح…",
     understood: "فهمت:", capture_ok: "اتسجل في الوارد", offline_queued: "محفوظ عندك — هيتبعت أول ما النت يرجع",
+    // sync §6.4
+    sync_conflict: "⚠️ في تعديل تاني على النسخة دي من السيرفر — لازم تحسم التعارض",
+    load_theirs: "اعرض نسخة السيرفر", keep_mine: "أبعتلّي",
+    pull_to_refresh: "اسحب للتحديث", releasing: "سيب للتحديث…", updating: "بروح التحديث…",
     // quick add
     quickadd_preview: "المهمة هتكون كده — أكّد قبل الإضافة",
     confirm_add: "أضف", cancel: "إلغاء", save: "حفظ", delete: "حذف", edit: "تعديل",
@@ -64,6 +68,9 @@ const dict = {
     capture_placeholder: "Capture anything… #tag tomorrow 5pm urgent",
     capture_btn: "Capture", capturing: "Saving…",
     understood: "Understood:", capture_ok: "Filed to Inbox", offline_queued: "Saved locally — will sync when you're back online",
+    sync_conflict: "⚠️ Another edit was saved on the server — resolve the conflict",
+    load_theirs: "Show server version", keep_mine: "Send mine",
+    pull_to_refresh: "Pull to refresh", releasing: "Release to refresh…", updating: "Refreshing…",
     quickadd_preview: "Here's the task — confirm before adding",
     confirm_add: "Add", cancel: "Cancel", save: "Save", delete: "Delete", edit: "Edit",
     task_done: "Done", task_title: "Task", status: "Status",

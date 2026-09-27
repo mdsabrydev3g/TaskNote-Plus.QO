@@ -3,7 +3,7 @@ import { jwtVerify } from "jose";
 import { COOKIES } from "@/lib/auth";
 
 const PUBLIC_API = [/^\/api\/auth\/(login|signup|refresh)/, /^\/api\/health/];
-const PUBLIC_PAGES = [/^\/(login|signup)/, /^\/_next/, /^\/(manifest\.webmanifest|sw\.js|icons|favicon\.ico)/];
+const PUBLIC_PAGES = [/^\/(login|signup|privacy|terms)/, /^\/_next/, /^\/(manifest\.webmanifest|sw\.js|icons|favicon\.ico)/];
 
 const APP_PAGES = [/^\/(inbox|notes|tasks|calendar|projects|settings|today)/, /^\//];
 
