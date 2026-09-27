@@ -18,7 +18,7 @@ DECLARE
   t text;
 BEGIN
   FOREACH t IN ARRAY ARRAY[
-    'Note', 'Task', 'Project', 'Event', 'Tag', 'NoteTag', 'TaskTag',
+    'Note', 'Task', 'Project', 'Event', 'Tag',
     'Link', 'AIActionLog', 'Device'
   ]
   LOOP
@@ -28,10 +28,10 @@ BEGIN
       DROP POLICY IF EXISTS workspace_isolation ON public.%1$I;
       CREATE POLICY workspace_isolation ON public.%1$I
         USING (
-          "workspaceId" = current_setting('app.workspace_id', true)::uuid
+          "workspaceId" = current_setting('app.workspace_id', true)
         )
         WITH CHECK (
-          "workspaceId" = current_setting('app.workspace_id', true)::uuid
+          "workspaceId" = current_setting('app.workspace_id', true)
         )
     $f$, t);
   END LOOP;
@@ -41,16 +41,16 @@ END $$;
 DROP POLICY IF EXISTS workspace_isolation ON public."NoteTag";
 CREATE POLICY workspace_isolation ON public."NoteTag"
   USING (EXISTS (SELECT 1 FROM public."Note" n WHERE n.id = "NoteTag"."noteId"
-                 AND n."workspaceId" = current_setting('app.workspace_id', true)::uuid))
+                 AND n."workspaceId" = current_setting('app.workspace_id', true)))
   WITH CHECK (EXISTS (SELECT 1 FROM public."Note" n WHERE n.id = "NoteTag"."noteId"
-                 AND n."workspaceId" = current_setting('app.workspace_id', true)::uuid));
+                 AND n."workspaceId" = current_setting('app.workspace_id', true)));
 
 DROP POLICY IF EXISTS workspace_isolation ON public."TaskTag";
 CREATE POLICY workspace_isolation ON public."TaskTag"
   USING (EXISTS (SELECT 1 FROM public."Task" k WHERE k.id = "TaskTag"."taskId"
-                 AND k."workspaceId" = current_setting('app.workspace_id', true)::uuid))
+                 AND k."workspaceId" = current_setting('app.workspace_id', true)))
   WITH CHECK (EXISTS (SELECT 1 FROM public."Task" k WHERE k.id = "TaskTag"."taskId"
-                 AND k."workspaceId" = current_setting('app.workspace_id', true)::uuid));
+                 AND k."workspaceId" = current_setting('app.workspace_id', true)));
 
 -- Full-text search helper (Postgres FTS, §7.10): simple expression index on notes/tasks
 CREATE INDEX IF NOT EXISTS note_fts_gin ON public."Note" USING gin (
