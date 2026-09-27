@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseQuickAdd } from "@/lib/quick-add";
+import { parseQuickAdd, zoneOffsetMin } from "@/lib/quick-add";
 
 // Fixed "now": Sunday 2026-09-27 10:00 local
 const NOW = new Date(2026, 8, 27, 10, 0, 0).toISOString();
@@ -80,5 +80,37 @@ describe("quick-add parser — Arabic", () => {
     expect(day(r.dueAt)).toBe("2026-09-28");
     expect(new Date(r.dueAt!).getHours()).toBe(17);
     expect(r.priority).toBe("HIGH");
+  });
+});
+
+describe("quick-add parser — timezone (server in UTC, user elsewhere)", () => {
+  // A Cairo user (UTC+3 in Sept, +2 in Dec — Egypt observes DST) captures "بكرة 5pm".
+  // "now" is a UTC instant. Stored dueAt, rendered back in Africa/Cairo, must read 5pm.
+  const nowUtc = "2026-09-27T10:00:00.000Z";
+
+  it("stores the correct UTC instant so local display is 5pm (regression: 8pm bug)", () => {
+    const r = parseQuickAdd("راجع العقد بكرة 5pm", nowUtc, "Africa/Cairo");
+    expect(r.dueAt).toBe("2026-09-28T14:00:00.000Z"); // 17:00 Cairo = 14:00Z
+    const hr = parseInt(new Date(r.dueAt!).toLocaleString("en-GB", { timeZone: "Africa/Cairo", hour: "2-digit", hour12: false }), 10);
+    expect(hr).toBe(17);
+    expect(new Date(r.dueAt!).toLocaleDateString("en-CA", { timeZone: "Africa/Cairo" })).toBe("2026-09-28");
+  });
+
+  it("date crossing a DST boundary stays on the correct local calendar day", () => {
+    // 2026-09-27 (summer +3) parsing a 2026-12-20 date (winter +2): must stay Dec-20 local.
+    const r = parseQuickAdd("flight 2026-12-20", nowUtc, "Africa/Cairo");
+    expect(new Date(r.dueAt!).toLocaleDateString("en-CA", { timeZone: "Africa/Cairo" })).toBe("2026-12-20");
+  });
+
+  it("zoneOffsetMin reflects real IANA offsets", () => {
+    expect(zoneOffsetMin("Africa/Cairo", Date.parse("2026-09-27T10:00:00Z"))).toBe(180); // summer
+    expect(zoneOffsetMin("Africa/Cairo", Date.parse("2026-12-20T10:00:00Z"))).toBe(120);  // winter (DST)
+    expect(zoneOffsetMin("UTC", Date.parse("2026-09-27T10:00:00Z"))).toBe(0);
+    expect(zoneOffsetMin("America/New_York", Date.parse("2026-09-27T10:00:00Z"))).toBe(-240); // EDT
+  });
+
+  it("unknown zone falls back safely (never throws)", () => {
+    const r = parseQuickAdd("بكرة 5pm", nowUtc, "Mars/Olympus");
+    expect(r.dueAt).toBe("2026-09-28T17:00:00.000Z"); // UTC fallback
   });
 });

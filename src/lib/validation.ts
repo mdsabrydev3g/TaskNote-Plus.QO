@@ -52,6 +52,8 @@ export const captureSchema = z.object({
   kind: z.enum(["auto", "note", "task"]).default("auto"),
   clientRequestId: z.string().max(64),
   deviceOrigin: z.string().max(64).optional(),
+  tz: z.string().max(64).optional(),          // IANA zone from client (§7.7 time-aware)
+  now: z.string().datetime({ offset: true }).optional(), // client wall-clock instant
 });
 
 export const quickAddSchema = z.object({

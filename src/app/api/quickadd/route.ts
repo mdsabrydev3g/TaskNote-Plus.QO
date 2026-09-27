@@ -8,7 +8,8 @@ export const POST = api({
   body: quickAddSchema,
   limit: { limit: 30, windowMs: 60_000 },
   handler: async (_req, _c, _s, body: z.infer<typeof quickAddSchema>) => {
-    const parsed = parseQuickAdd(body.text, body.now);
+    const nowIso = body.now ?? new Date().toISOString();
+    const parsed = parseQuickAdd(body.text, nowIso, body.tz);
     return json({ parsed });
   },
 });

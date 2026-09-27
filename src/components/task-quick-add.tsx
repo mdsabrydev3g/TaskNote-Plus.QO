@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { apiFetch, newClientRequestId } from "@/lib/client";
+import { apiFetch, localTimeContext, newClientRequestId } from "@/lib/client";
 import { useApp } from "./providers";
 
 interface Parsed {
@@ -20,7 +20,7 @@ export function TaskQuickAdd() {
     const value = text.trim();
     if (!value) return;
     setBusy(true);
-    const res = await apiFetch<{ parsed: Parsed }>("/api/quickadd", { method: "POST", json: { text: value } });
+    const res = await apiFetch<{ parsed: Parsed }>("/api/quickadd", { method: "POST", json: { text: value, ...localTimeContext() } });
     setBusy(false);
     if (res.ok) {
       const p = res.data!.parsed;

@@ -10,7 +10,8 @@ import { resolveTags } from "@/lib/tags";
 export const POST = api({
   body: captureSchema,
   handler: async (_req, _c, s, body: z.infer<typeof captureSchema>) => {
-    const parsed = parseQuickAdd(body.text);
+    const nowIso = body.now ?? new Date().toISOString();
+    const parsed = parseQuickAdd(body.text, nowIso, body.tz);
     const wantsTask =
       body.kind === "task" ||
       (body.kind === "auto" && (parsed.dueAt !== undefined || parsed.priority !== "NONE" || parsed.tags.length > 0));

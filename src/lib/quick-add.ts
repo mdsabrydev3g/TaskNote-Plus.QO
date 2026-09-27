@@ -50,24 +50,51 @@ const WORDNUM_KEYS = Object.keys(WORDNUM).join("|");
 const LB = String.raw`(?<![\p{L}\p{N}])`;
 const RB = String.raw`(?![\p{L}\p{N}])`;
 
-function startOfDay(now: Date): Date {
-  const d = new Date(now); d.setHours(0, 0, 0, 0); return d;
-}
-function addDays(now: Date, n: number): Date {
-  const d = startOfDay(now); d.setDate(d.getDate() + n); return d;
-}
-function nextWeekday(now: Date, dow: number): Date {
-  const d = startOfDay(now);
-  let delta = (dow - d.getDay() + 7) % 7;
-  if (delta === 0) delta = 7;
-  d.setDate(d.getDate() + delta);
-  return d;
+// Minutes to ADD to a UTC instant to get wall-clock time in IANA zone `tz`
+// (e.g. Africa/Cairo Sept 2026 → +180). Falls back to server-local offset.
+export function zoneOffsetMin(tz: string | undefined, ts: number): number {
+  if (!tz) return -new Date(ts).getTimezoneOffset();
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: tz, hourCycle: "h23",
+      year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", second: "2-digit",
+    }).formatToParts(new Date(ts));
+    const p: Record<string, number> = {};
+    for (const x of parts) if (x.type !== "literal") p[x.type] = parseInt(x.value, 10);
+    const asUtc = Date.UTC(p.year, p.month - 1, p.day, p.hour % 24, p.minute, p.second);
+    return Math.round((asUtc - Math.floor(ts / 1000) * 1000) / 60_000);
+  } catch {
+    return 0; // unknown zone → UTC, never crash the parser
+  }
 }
 
-export function parseQuickAdd(input: string, nowIso?: string): ParsedQuickAdd {
+// All date math works on a "wall-clock-as-UTC" reference: a Date whose UTC
+// fields equal the user's local clock. `tz` is an IANA zone (defaults to the
+// machine's). Converting the wall result back to a real instant re-resolves the
+// offset at the target time, so DST boundaries don't shift the calendar day (§6.7).
+export function parseQuickAdd(input: string, nowIso?: string, tz?: string): ParsedQuickAdd {
   const now = nowIso ? new Date(nowIso) : new Date();
+  const nowMs = now.getTime();
+  const zone = tz && tz !== "unknown" ? tz : undefined;
+  const offAt = (ms: number) => zoneOffsetMin(zone, ms);
+  const base = new Date(nowMs + offAt(nowMs) * 60_000);
   let text = normalize(input.trim());
   const matched: string[] = [];
+
+  const startOfToday = (): Date => {
+    const d = new Date(base); d.setUTCHours(0, 0, 0, 0); return d;
+  };
+  const addDays = (n: number): Date => {
+    const d = startOfToday(); d.setUTCDate(d.getUTCDate() + n); return d;
+  };
+  const nextWeekday = (dow: number): Date => {
+    const d = startOfToday();
+    let delta = (dow - d.getUTCDay() + 7) % 7;
+    if (delta === 0) delta = 7;
+    d.setUTCDate(d.getUTCDate() + delta);
+    return d;
+  };
 
   // Tags: #word (survives both languages — unicode property escapes)
   const tags: string[] = [];
@@ -105,9 +132,9 @@ export function parseQuickAdd(input: string, nowIso?: string): ParsedQuickAdd {
     due = d; text = text.replace(re, " "); matched.push(label);
   };
 
-  tryConsume(new RegExp(`${LB}(?:today|tonight|النهاردة|النهارده|اليوم)${RB}`, "iu"), () => addDays(now, 0), "date:today");
-  tryConsume(new RegExp(`${LB}(?:tomorrow|tmrw|bakra|بكراً?|بكرة|غداً?|غدًا)${RB}`, "iu"), () => addDays(now, 1), "date:tomorrow");
-  tryConsume(new RegExp(`${LB}(?:next\\s+week|الأسبوع\\s*الجاي|الاسبوع\\s*الجاي|الأسبوع\\s*القادم|الاسبوع\\s*القادم)${RB}`, "iu"), () => addDays(now, 7), "date:next-week");
+  tryConsume(new RegExp(`${LB}(?:today|tonight|النهاردة|النهارده|اليوم)${RB}`, "iu"), () => addDays(0), "date:today");
+  tryConsume(new RegExp(`${LB}(?:tomorrow|tmrw|bakra|بكراً?|بكرة|غداً?|غدًا)${RB}`, "iu"), () => addDays(1), "date:tomorrow");
+  tryConsume(new RegExp(`${LB}(?:next\\s+week|الأسبوع\\s*الجاي|الاسبوع\\s*الجاي|الأسبوع\\s*القادم|الاسبوع\\s*القادم)${RB}`, "iu"), () => addDays(7), "date:next-week");
   tryConsume(
     new RegExp(`${LB}(?:بعد|in)\\s+(\\d{1,3}|${WORDNUM_KEYS})\\s*(أيام|days?|يوم|أسابيع|اسابيع|weeks?|أسبوع|اسبوع)${RB}`, "iu"),
     (m) => {
@@ -115,7 +142,7 @@ export function parseQuickAdd(input: string, nowIso?: string): ParsedQuickAdd {
       const n = WORDNUM[nRaw] ?? parseInt(nRaw, 10);
       if (Number.isNaN(n)) return undefined;
       const isWeek = /week|أسبوع|اسبوع|أسابيع|اسابيع/i.test(m[2]);
-      return addDays(now, n * (isWeek ? 7 : 1));
+      return addDays(n * (isWeek ? 7 : 1));
     },
     "date:relative"
   );
@@ -124,20 +151,20 @@ export function parseQuickAdd(input: string, nowIso?: string): ParsedQuickAdd {
     (m) => {
       const dow = WEEKDAYS[m[1].toLowerCase()] ?? WEEKDAYS[m[1]];
       if (dow === undefined) return undefined;
-      return nextWeekday(now, dow);
+      return nextWeekday(dow);
     },
     "date:weekday"
   );
   tryConsume(/\b(20\d{2})-(\d{1,2})-(\d{1,2})\b/, (m) => {
-    const d = new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10));
-    d.setHours(0, 0, 0, 0); return d;
+    const d = new Date(Date.UTC(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10)));
+    d.setUTCHours(0, 0, 0, 0); return d;
   }, "date:iso");
   tryConsume(/\b(?:on\s+)?(\d{1,2})[\/-](\d{1,2})(?:[\/-](\d{2,4}))?\b/, (m) => {
     const day = parseInt(m[1], 10), mon = parseInt(m[2], 10);
     if (day < 1 || day > 31 || mon < 1 || mon > 12) return undefined;
-    const yr = m[3] ? parseInt(m[3].length === 2 ? "20" + m[3] : m[3], 10) : now.getFullYear();
-    let d = new Date(yr, mon - 1, day); d.setHours(0, 0, 0, 0);
-    if (!m[3] && d < startOfDay(now)) d = new Date(yr + 1, mon - 1, day);
+    const yr = m[3] ? parseInt(m[3].length === 2 ? "20" + m[3] : m[3], 10) : base.getUTCFullYear();
+    let d = new Date(Date.UTC(yr, mon - 1, day)); d.setUTCHours(0, 0, 0, 0);
+    if (!m[3] && d < startOfToday()) d = new Date(Date.UTC(yr + 1, mon - 1, day));
     return d;
   }, "date:numeric");
   tryConsume(
@@ -146,8 +173,8 @@ export function parseQuickAdd(input: string, nowIso?: string): ParsedQuickAdd {
       const mon = MONTHS[m[1].toLowerCase()] ?? MONTHS[m[1]];
       const day = parseInt(m[2], 10);
       if (!mon || day < 1 || day > 31) return undefined;
-      let d = new Date(now.getFullYear(), mon - 1, day); d.setHours(0, 0, 0, 0);
-      if (d < startOfDay(now)) d = new Date(now.getFullYear() + 1, mon - 1, day);
+      let d = new Date(Date.UTC(base.getUTCFullYear(), mon - 1, day)); d.setUTCHours(0, 0, 0, 0);
+      if (d < startOfToday()) d = new Date(Date.UTC(base.getUTCFullYear() + 1, mon - 1, day));
       return d;
     },
     "date:month-day"
@@ -155,8 +182,11 @@ export function parseQuickAdd(input: string, nowIso?: string): ParsedQuickAdd {
 
   if (due) {
     const d = new Date(due);
-    if (hour !== undefined) d.setHours(hour, minute, 0, 0);
-    due = d;
+    if (hour !== undefined) d.setUTCHours(hour, minute, 0, 0);
+    // Wall → instant, re-evaluating the zone offset at the target time (DST-safe).
+    const wall = d.getTime();
+    const instant = wall - offAt(wall - offAt(nowMs) * 60_000) * 60_000;
+    due = new Date(instant);
   }
 
   const title = text.replace(/\s+/g, " ").replace(/^[\s,:-]+|[\s,:-]+$/g, "").trim();
