@@ -1,0 +1,288 @@
+// TaskNote Plus — Prisma schema (PostgreSQL 16 / Neon)
+// Tenancy: every content-bearing row is workspace-scoped (§6.6).
+// RLS policies live in prisma/sql/rls.sql and are applied by migrations.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL") // Neon pooled connection string
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  displayName  String?
+  locale       String   @default("ar") // "ar" | "en"
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  workspaces     Workspace[]
+  refreshTokens  RefreshToken[]
+  auditLogs      AuditLog[]
+  securityEvents SecurityEvent[]
+}
+
+model Workspace {
+  id        String   @id @default(uuid())
+  userId    String
+  name      String   @default("My Workspace")
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notes  Note[]
+  tasks  Task[]
+  projects Project[]
+  events Event[]
+  tags   Tag[]
+  links  Link[]
+  aiActionLogs AIActionLog[]
+  auditLogs    AuditLog[]
+  devices      Device[]
+
+  @@index([userId])
+}
+
+enum TaskStatus {
+  INBOX
+  TODO
+  IN_PROGRESS
+  DONE
+  CANCELED
+}
+
+enum Priority {
+  NONE
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum Energy {
+  DEEP
+  LIGHT
+  ADMIN
+}
+
+model Note {
+  id           String    @id @default(uuid())
+  workspaceId  String
+  title        String    @default("")
+  content      String    @default("") // markdown
+  pinned       Boolean   @default(false)
+  aiAccessible Boolean   @default(true) // §4 Understand — per-item scope
+  source       String    @default("manual") // manual | capture | import | ai
+  clientRequestId String? // idempotent capture (§7.1)
+  version      Int       @default(1)
+  deletedAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  tags      NoteTag[]
+
+  @@unique([workspaceId, clientRequestId])
+  @@index([workspaceId, updatedAt])
+  @@index([workspaceId, deletedAt])
+}
+
+model Task {
+  id           String     @id @default(uuid())
+  workspaceId  String
+  title        String
+  description  String?
+  status       TaskStatus @default(TODO)
+  priority     Priority   @default(NONE)
+  energy       Energy?
+  dueAt        DateTime?
+  deferAt      DateTime?
+  completedAt  DateTime?
+  recurringRule String?   // RFC 5545 RRULE (§6.7)
+  projectId    String?
+  parentId     String?
+  source       String     @default("manual")
+  version      Int        @default(1)
+  deviceOrigin String?
+  clientRequestId String? // idempotency (§7.1)
+  deletedAt    DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project   Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  parent    Task?     @relation("TaskSubtasks", fields: [parentId], references: [id], onDelete: Cascade)
+  children  Task[]    @relation("TaskSubtasks")
+  tags      TaskTag[]
+
+  @@unique([workspaceId, clientRequestId])
+  @@index([workspaceId, status, dueAt])
+  @@index([workspaceId, updatedAt])
+  @@index([workspaceId, deletedAt])
+  @@index([projectId])
+}
+
+model Project {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name        String
+  description String?
+  color       String?
+  archived    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  tasks     Task[]
+
+  @@index([workspaceId, updatedAt])
+}
+
+model Event {
+  id          String    @id @default(uuid())
+  workspaceId String
+  title       String
+  startAt     DateTime
+  endAt       DateTime?
+  tz          String    @default("UTC") // stored UTC + explicit tz (§6.7)
+  rrule       String?   // RFC 5545
+  noteId      String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, startAt])
+}
+
+model Tag {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name        String
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  notes     NoteTag[]
+  tasks     TaskTag[]
+
+  @@unique([workspaceId, name])
+}
+
+model NoteTag {
+  noteId String
+  tagId  String
+  note   Note @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  tag    Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([noteId, tagId])
+}
+
+model TaskTag {
+  taskId String
+  tagId  String
+  task   Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  tag    Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, tagId])
+}
+
+// Bi-directional links between entities (§7.2)
+model Link {
+  id          String  @id @default(uuid())
+  workspaceId String
+  fromType    String // note | task | project | event
+  fromId      String
+  toType      String
+  toId        String
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, fromType, fromId, toType, toId])
+  @@index([workspaceId, toType, toId])
+}
+
+// §6.5 required tables (skeletons wired for later AI phases)
+model AIActionLog {
+  id          String   @id @default(uuid())
+  workspaceId String
+  kind        String // suggest | summarize | quickadd_parse | ...
+  model       String?
+  promptHash  String?
+  inputRefs   Json?
+  output      Json?
+  reversibleUntil DateTime?
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  userId      String?
+  workspaceId String?
+  action      String // login | logout | delete | export | permission_change | signup
+  detail      Json?
+  ip          String?
+  createdAt   DateTime @default(now())
+
+  user      User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([workspaceId, createdAt])
+}
+
+model SecurityEvent {
+  id        String   @id @default(uuid())
+  userId    String
+  type      String // failed_login | token_reuse_detected | rate_limit | suspicious_activity
+  ip        String?
+  detail    Json?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+// Rotating refresh tokens with reuse detection (§10.2)
+model RefreshToken {
+  id           String    @id @default(uuid())
+  userId       String
+  tokenHash    String    @unique
+  familyId     String // rotation family: reuse of old token invalidates whole family
+  deviceName   String?
+  platform     String? // web | android | ios | desktop
+  expiresAt    DateTime
+  revokedAt    DateTime?
+  replacedById String?
+  createdAt    DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([familyId])
+}
+
+// DeviceRegistry (§6.5) — every authenticated device, revocable
+model Device {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name        String
+  platform    String
+  lastSeenAt  DateTime @default(now())
+  revokedAt   DateTime?
+  createdAt   DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+}
